@@ -1,0 +1,18 @@
+apply plugin: 'checkstyle'
+
+
+checkstyle {
+    sourceSets = [sourceSets.main]
+    maxWarnings = 0
+    ignoreFailures = false
+    configFile file("$projectDir/gradle/checkstyle/checkstyle.xml") //Checkstyle配置文件路径
+    toolVersion '8.2'
+}
+
+tasks.withType(Checkstyle) {
+    reports {
+        xml.enabled false
+        html.enabled true
+    }
+}
+

@@ -1,13 +1,84 @@
-group 'org.easydojo'
-version '1.0-SNAPSHOT'
+buildscript {
+    repositories {
+        maven { url("https://plugins.gradle.org/m2/") }
+    }
+    dependencies {
+        classpath "gradle.plugin.com.avast.gradle:gradle-docker-compose-plugin:0.14.3"
+        classpath "org.owasp:dependency-check-gradle:6.2.2"
+        classpath "org.sonarsource.scanner.gradle:sonarqube-gradle-plugin:3.3"
+    }
+}
 
-apply plugin: 'java'
-apply plugin: 'idea'
-
-sourceCompatibility = 1.8
+plugins {
+    id 'java'
+    id 'idea'
+    id 'application'
+    id "org.springframework.boot" version "2.1.4.RELEASE"
+    id "io.spring.dependency-management" version "1.0.6.RELEASE"
+}
 
 repositories {
     mavenCentral()
+}
+
+application {
+    mainClassName = "com.easydojo.template.Application"
+    applicationDefaultJvmArgs = ["-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"]
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+// add componentTest & apiTest as source
+sourceSets {
+    componentTest {
+        compileClasspath += sourceSets.main.output + sourceSets.test.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.test.output
+    }
+
+    apiTest {
+        compileClasspath += sourceSets.main.output + sourceSets.test.output
+        runtimeClasspath += sourceSets.main.output + sourceSets.test.output
+    }
+}
+
+configurations {
+    componentTestImplementation.extendsFrom testImplementation
+    componentTestRuntimeOnly.extendsFrom testRuntimeOnly
+    apiTestImplementation.extendsFrom testImplementation
+    apiTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+task componentTest(type: Test) {
+    description = 'Run component tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.componentTest.output.classesDirs
+    classpath = sourceSets.componentTest.runtimeClasspath
+    shouldRunAfter test
+}
+
+task apiTest(type: Test) {
+    description = 'Run API tests.'
+    group = 'verification'
+    testClassesDirs = sourceSets.apiTest.output.classesDirs
+    classpath = sourceSets.apiTest.runtimeClasspath
+    shouldRunAfter componentTest
+}
+
+configurations.all {
+    exclude group: "junit", module: "junit"
+    exclude group: "org.assertj", module: "assertj-core"
+}
+
+tasks.withType(Test) {
+    useJUnitPlatform()
+}
+
+check.dependsOn componentTest
+check.dependsOn apiTest
+
+bootJar {
+    launchScript()
 }
 
 test {
@@ -27,16 +98,54 @@ test {
     }
 }
 
-def JUNIT5_API_VERSION = '5.7.0'
-def JUNIT5_PLATFORM_VERSION = '1.7.0'
-
 dependencies {
-    compile 'com.google.guava:guava:28.2-jre'
-    testCompile "org.junit.jupiter:junit-jupiter-api:${JUNIT5_API_VERSION}"
-    testCompile "org.junit.jupiter:junit-jupiter-engine:${JUNIT5_API_VERSION}"
-    testCompile "org.junit.jupiter:junit-jupiter-params:${JUNIT5_API_VERSION}"
-    testCompile "org.junit.platform:junit-platform-launcher:${JUNIT5_PLATFORM_VERSION}"
-    testCompile 'org.assertj:assertj-core:3.10.0'
-    testCompile 'org.mockito:mockito-junit-jupiter:2.17.0'
-    testImplementation 'com.approvaltests:approvaltests:4.0.2'
+    //spring dependencies
+    implementation('org.springframework.boot:spring-boot-starter-web')
+    implementation('org.springframework.boot:spring-boot-starter-actuator')
+    implementation("org.springframework.boot:spring-boot-starter-aop")
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    //common dependencies
+    implementation ('mysql:mysql-connector-java')
+    implementation('io.jsonwebtoken:jjwt:0.9.1')
+    implementation("org.flywaydb:flyway-core")
+    implementation('com.google.guava:guava:28.2-jre')
+    implementation('commons-io:commons-io:2.6')
+    implementation('org.apache.commons:commons-lang3')
+    implementation('org.apache.commons:commons-collections4:4.2')
+    implementation('io.springfox:springfox-swagger2:2.9.2')
+    implementation('io.springfox:springfox-swagger-ui:2.9.2')
+    implementation('com.cwbase:logback-redis-appender:1.1.5')
+    implementation('net.javacrumbs.shedlock:shedlock-spring:2.4.0')
+    implementation('net.javacrumbs.shedlock:shedlock-provider-jdbc-template:2.4.0')
+
+    //jackson dependencies
+    implementation('com.fasterxml.jackson.module:jackson-module-parameter-names:2.9.8')
+    implementation('com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.9.8')
+    implementation('com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.9.8')
+    implementation('com.fasterxml.jackson.core:jackson-core:2.9.8')
+    implementation('com.fasterxml.jackson.core:jackson-databind:2.9.8')
+    implementation('com.fasterxml.jackson.core:jackson-annotations:2.9.8')
+
+    //test dependencies
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation(platform('org.junit:junit-bom:5.7.2'))
+    testImplementation('org.junit.jupiter:junit-jupiter')
+
+    testImplementation('org.mockito:mockito-junit-jupiter:2.23.0')
+    testImplementation 'com.approvaltests:approvaltests:11.7.0'
+    testImplementation("io.rest-assured:spring-mock-mvc")
+    testImplementation 'org.assertj:assertj-core:3.10.0'
+//    testImplementation('org.hamcrest:hamcrest:2.1')
 }
+
+
+apply from: "${rootProject.projectDir}/gradle/idea.gradle"
+apply from: "${rootProject.projectDir}/gradle/docker-compose/docker-compose.gradle"
+apply from: "${rootProject.projectDir}/gradle/dependency-check/dependency-check.gradle"
+apply from: "${rootProject.projectDir}/gradle/checkstyle/checkstyle.gradle"
+apply from: "${rootProject.projectDir}/gradle/git-hooks/git-hooks.gradle"
+apply from: "${rootProject.projectDir}/gradle/version-info.gradle"
+apply from: "${rootProject.projectDir}/gradle/jacoco.gradle"
+//apply from: "${rootProject.projectDir}/gradle/sonarqube.gradle"
